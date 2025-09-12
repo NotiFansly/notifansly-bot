@@ -110,6 +110,21 @@ func (r *Repository) DeleteMonitoredUserByUsername(guildID, username string) err
 	})
 }
 
+func (r *Repository) GetGuildSubscription(guildID string) (*models.GuildSubscription, error) {
+	var subscription models.GuildSubscription
+	result := r.db.Where("guild_id = ?", guildID).First(&subscription)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &subscription, nil
+}
+
+// Function to create or update a subscription (will be used by the webhook and owner command)
+func (r *Repository) UpsertGuildSubscription(sub *models.GuildSubscription) error {
+	// This will either create a new record or update the existing one for the GuildID
+	return r.db.Save(sub).Error
+}
+
 // GetMonitoredUsersForGuild returns all monitored users for a specific guild
 func (r *Repository) GetMonitoredUsersForGuild(guildID string) ([]models.MonitoredUser, error) {
 	var users []models.MonitoredUser

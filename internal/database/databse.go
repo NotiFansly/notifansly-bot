@@ -91,7 +91,7 @@ func Init(dbType string, connString string) error {
 	}
 
 	// Auto-migrate models
-	err = DB.AutoMigrate(&models.SchemaVersion{}, &models.MonitoredUser{})
+	err = DB.AutoMigrate(&models.SchemaVersion{}, &models.MonitoredUser{}, &models.GuildSubscription{})
 	if err != nil {
 		return fmt.Errorf("failed to migrate database schema: %w", err)
 	}

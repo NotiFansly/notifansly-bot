@@ -79,6 +79,8 @@ func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCr
 			b.handleServersCommand(s, i)
 		case "leave":
 			b.handleLeaveCommand(s, i)
+		case "setlimit":
+			b.handleSetLimitCommand(s, i)
 		}
 
 	case discordgo.InteractionMessageComponent:
@@ -108,8 +110,17 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 
 	username := extractUsernameFromURL(rawUsername)
 
+	guildLimit := config.MaxMonitoredUsersPerGuild
+	subscription, err := b.Repo.GetGuildSubscription(i.GuildID)
+	if err == nil && subscription != nil {
+		// Check if the subscription is still valid
+		if time.Now().Unix() < subscription.ExpiresAt {
+			guildLimit = subscription.UserLimit
+		}
+	}
+
 	// Check if the limit is enabled (a value > 0)
-	if config.MaxMonitoredUsersPerGuild > 0 {
+	if guildLimit > 0 {
 		count, err := b.Repo.CountMonitoredUsersForGuild(i.GuildID)
 		if err != nil {
 			log.Printf("Error checking guild limit for guild %s: %v", i.GuildID, err)
@@ -117,10 +128,10 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 			return
 		}
 
-		if count >= int64(config.MaxMonitoredUsersPerGuild) {
+		if count >= int64(guildLimit) {
 			existingUser, _ := b.Repo.GetMonitoredUserByUsername(i.GuildID, username)
 			if existingUser == nil {
-				message := fmt.Sprintf("This server has reached its limit of %d monitored users. To add another, you must first remove one using `/remove`.", config.MaxMonitoredUsersPerGuild)
+				message := fmt.Sprintf("This server has reached its limit of %d monitored users. To add another, you must first remove one using `/remove`.", guildLimit)
 				b.respondToInteraction(s, i, message, true)
 				return
 			}
@@ -133,7 +144,7 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// Defer the response to prevent a timeout. The final response will be public.
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	if err != nil {
@@ -645,6 +656,48 @@ func (b *Bot) handleSetLiveMentionCommand(s *discordgo.Session, i *discordgo.Int
 		message = fmt.Sprintf("Live mention role for **%s** set to %s.", username, roleMention)
 	}
 	b.editInteractionResponse(s, i, message)
+}
+
+func (b *Bot) handleSetLimitCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !b.isBotOwner(i) {
+		b.respondToInteraction(s, i, "This command is for the bot owner only.", true)
+		return
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+
+	options := i.ApplicationCommandData().Options
+	guildID := options[0].StringValue()
+	limit := options[1].IntValue()
+	durationDays := int64(0)
+	if len(options) > 2 {
+		durationDays = options[2].IntValue()
+	}
+
+	var expiresAt int64
+	if durationDays > 0 {
+		expiresAt = time.Now().Add(time.Duration(durationDays) * 24 * time.Hour).Unix()
+	} else {
+		// A very far future date for "never"
+		expiresAt = time.Now().AddDate(100, 0, 0).Unix()
+	}
+
+	sub := &models.GuildSubscription{
+		GuildID:          guildID,
+		SubscriptionTier: "manual-override",
+		UserLimit:        int(limit),
+		ExpiresAt:        expiresAt,
+	}
+
+	repo := database.NewRepository()
+	if err := repo.UpsertGuildSubscription(sub); err != nil {
+		b.editInteractionResponse(s, i, fmt.Sprintf("Error setting limit: %v", err))
+		return
+	}
+
+	b.editInteractionResponse(s, i, fmt.Sprintf("Successfully set user limit for server `%s` to **%d**.", guildID, limit))
 }
 
 func getRoleName(roleID string) string {

@@ -19,6 +19,18 @@ type MonitoredUser struct {
 	PostMentionRole         string `gorm:"column:post_mention_role"`
 }
 
+type GuildSubscription struct {
+	GuildID          string `gorm:"primaryKey;column:guild_id"`
+	SubscriptionTier string `gorm:"column:subscription_tier"` // e.g., "tier1", "tier2", "enterprise"
+	UserLimit        int    `gorm:"column:user_limit"`
+	ExpiresAt        int64  `gorm:"column:expires_at"` // UNIX timestamp for expiration
+	UpdatedAt        int64  `gorm:"autoUpdateTime"`
+}
+
+func (GuildSubscription) TableName() string {
+	return "guild_subscriptions"
+}
+
 type SchemaVersion struct {
 	Version int `gorm:"primaryKey"`
 }

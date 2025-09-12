@@ -202,6 +202,30 @@ func (b *Bot) registerCommands() {
 				},
 			},
 		},
+		{
+			Name:        "setlimit",
+			Description: "[Owner Only] Manually set the monitored user limit for a server.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "server_id",
+					Description: "The ID of the server to modify.",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "limit",
+					Description: "The new user limit.",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "duration_days",
+					Description: "How many days until this expires (0 for never).",
+					Required:    false,
+				},
+			},
+		},
 	}
 
 	_, err := b.Session.ApplicationCommandBulkOverwrite(b.Session.State.User.ID, "", commands)
