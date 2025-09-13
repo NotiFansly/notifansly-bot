@@ -131,7 +131,11 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		if count >= int64(guildLimit) {
 			existingUser, _ := b.Repo.GetMonitoredUserByUsername(i.GuildID, username)
 			if existingUser == nil {
-				message := fmt.Sprintf("This server has reached its limit of %d monitored users. To add another, you must first remove one using `/remove`.", guildLimit)
+				message := fmt.Sprintf(
+					"This server is at its limit of %d monitored creators. If your subscription has expired, you can manage your plan here: <https://beta.notifansly.xyz/dashboard/server/%s/billing>",
+					guildLimit,
+					i.GuildID,
+				)
 				b.respondToInteraction(s, i, message, true)
 				return
 			}
