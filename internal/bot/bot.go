@@ -46,6 +46,7 @@ func (b *Bot) Start() error {
 
 	go b.monitorUsers()
 	go b.updateStatusPeriodically()
+	go b.heartbeat()
 
 	return nil
 }
@@ -82,6 +83,24 @@ func (b *Bot) guildDelete(s *discordgo.Session, event *discordgo.GuildDelete) {
 	}
 
 	b.updateBotStatus()
+}
+
+func (b *Bot) heartbeat() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		log.Println("Sending heartbeat...")
+		status := &models.ServiceStatus{
+			ServiceName:   "discord_bot",
+			Status:        "operational",
+			LastHeartbeat: time.Now(),
+		}
+		if err := b.Repo.UpsertServiceStatus(status); err != nil {
+			log.Printf("Error sending heartbeat: %v", err)
+		}
+		<-ticker.C
+	}
 }
 
 func (b *Bot) monitorUsers() {
@@ -212,6 +231,8 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 			})
 			if err != nil {
 				b.logNotificationError("live stream", user, targetChannel, err)
+			} else {
+				go b.Repo.IncrementNotificationCount()
 			}
 		}
 	}
@@ -281,6 +302,8 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 			})
 			if err != nil {
 				b.logNotificationError("post", user, targetChannel, err)
+			} else {
+				go b.Repo.IncrementNotificationCount()
 			}
 		}
 	}

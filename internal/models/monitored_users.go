@@ -1,5 +1,9 @@
 package models
 
+import (
+	"time"
+)
+
 type MonitoredUser struct {
 	GuildID                 string `gorm:"primaryKey;column:guild_id"`
 	UserID                  string `gorm:"primaryKey;column:user_id"`
@@ -25,6 +29,28 @@ type GuildSubscription struct {
 	UserLimit        int    `gorm:"column:user_limit"`
 	ExpiresAt        int64  `gorm:"column:expires_at"` // UNIX timestamp for expiration
 	UpdatedAt        int64  `gorm:"autoUpdateTime"`
+}
+
+type ServiceStatus struct {
+	ServiceName   string    `gorm:"primaryKey;column:service_name"`
+	Status        string    `gorm:"column:status"`
+	LastHeartbeat time.Time `gorm:"column:last_heartbeat"`
+	Details       string    `gorm:"column:details"`
+}
+
+func (ServiceStatus) TableName() string {
+	return "service_status"
+}
+
+// SystemStat holds key-value pairs for system-wide statistics.
+type SystemStat struct {
+	StatKey   string    `gorm:"primaryKey;column:stat_key"`
+	StatValue int64     `gorm:"column:stat_value"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
+}
+
+func (SystemStat) TableName() string {
+	return "system_stats"
 }
 
 func (GuildSubscription) TableName() string {

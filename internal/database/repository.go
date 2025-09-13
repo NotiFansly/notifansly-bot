@@ -19,6 +19,25 @@ func NewRepository() *Repository {
 	return &Repository{db: DB}
 }
 
+func (r *Repository) UpsertServiceStatus(status *models.ServiceStatus) error {
+	return WithRetry(func() error {
+		// GORM's Save works as an upsert for records with a primary key.
+		return r.db.Save(status).Error
+	})
+}
+
+// IncrementNotificationCount atomically increments the total notification count.
+func (r *Repository) IncrementNotificationCount() error {
+	return WithRetry(func() error {
+		return r.db.Model(&models.SystemStat{}).
+			Where("stat_key = ?", "total_notifications_sent").
+			Updates(map[string]interface{}{
+				"stat_value": gorm.Expr("stat_value + 1"),
+				"updated_at": time.Now(),
+			}).Error
+	})
+}
+
 // GetMonitoredUsers returns all monitored users
 func (r *Repository) GetMonitoredUsers() ([]models.MonitoredUser, error) {
 	var users []models.MonitoredUser

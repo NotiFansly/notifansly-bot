@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -91,9 +92,27 @@ func Init(dbType string, connString string) error {
 	}
 
 	// Auto-migrate models
-	err = DB.AutoMigrate(&models.SchemaVersion{}, &models.MonitoredUser{}, &models.GuildSubscription{})
+	err = DB.AutoMigrate(
+		&models.SchemaVersion{},
+		&models.MonitoredUser{},
+		&models.GuildSubscription{},
+		&models.ServiceStatus{},
+		&models.SystemStat{},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to migrate database schema: %w", err)
+	}
+
+	var stat models.SystemStat
+	if err := DB.First(&stat, "stat_key = ?", "total_notifications_sent").Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Println("Initializing 'total_notifications_sent' stat...")
+			DB.Create(&models.SystemStat{
+				StatKey:   "total_notifications_sent",
+				StatValue: 0,
+				UpdatedAt: time.Now(),
+			})
+		}
 	}
 
 	err = addIndexes()
