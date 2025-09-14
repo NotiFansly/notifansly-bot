@@ -6,6 +6,8 @@ import (
 	"log"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,6 +19,7 @@ import (
 var (
 	tokenRegex     = regexp.MustCompile(`[A-Za-z0-9]{40,}`)
 	fanslyURLRegex = regexp.MustCompile(`(?:https?://)?(?:www\.)?(?:fans\.ly|fansly\.com)/([^/\s]+)(?:/.*)?`)
+	hexColorRegex  = regexp.MustCompile(`^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$`)
 )
 
 func (b *Bot) ready(s *discordgo.Session, event *discordgo.Ready) {
@@ -75,6 +78,8 @@ func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCr
 			b.handleSetPostMentionCommand(s, i)
 		case "setlivemention":
 			b.handleSetLiveMentionCommand(s, i)
+		case "setcolor":
+			b.handleSetColorCommand(s, i)
 		case "servers":
 			b.handleServersCommand(s, i)
 		case "leave":
@@ -305,6 +310,91 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 
 		b.editInteractionResponse(s, i, fmt.Sprintf("Successfully added **%s** to the monitoring list for all notifications.", username))
 	}()
+}
+
+func (b *Bot) handleSetColorCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Defer response as we need to query the database
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	if err != nil {
+		log.Printf("Error deferring interaction: %v", err)
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	username := options[0].StringValue()
+	notifType := options[1].StringValue()
+	colorHex := options[2].StringValue()
+
+	// 1. Validate the hex color code
+	if !hexColorRegex.MatchString(colorHex) {
+		b.editInteractionResponse(s, i, "Invalid hex color format. Please use `#[6-digit code]`, for example: `#5865F2`.")
+		return
+	}
+
+	// 2. Convert hex string to a decimal integer
+	colorInt, err := strconv.ParseInt(strings.TrimPrefix(colorHex, "#"), 16, 32)
+	if err != nil {
+		b.editInteractionResponse(s, i, "Could not parse the provided color. Please check the format.")
+		return
+	}
+
+	// 3. Find the creator in this server to get their UserID
+	repo := database.NewRepository()
+	monitoredUser, err := repo.GetMonitoredUserByUsername(i.GuildID, username)
+	if err != nil {
+		log.Printf("Error fetching monitored user by username '%s': %v", username, err)
+		b.editInteractionResponse(s, i, "An error occurred while looking up the creator.")
+		return
+	}
+	if monitoredUser == nil {
+		b.editInteractionResponse(s, i, fmt.Sprintf("Creator **%s** is not being monitored in this server. Please add them first.", username))
+		return
+	}
+
+	// 4. Get existing color settings or create a new struct if none exist
+	colors, err := repo.GetEmbedColors(i.GuildID, monitoredUser.UserID)
+	if err != nil {
+		log.Printf("Error fetching existing embed colors for user %s: %v", monitoredUser.UserID, err)
+		b.editInteractionResponse(s, i, "An error occurred while fetching color settings.")
+		return
+	}
+	if colors == nil {
+		// No record exists, so we create a new one
+		colors = &models.UserEmbedColor{
+			GuildID: i.GuildID,
+			UserID:  monitoredUser.UserID,
+		}
+	}
+
+	// 5. Update the correct color field based on the 'type' option
+	switch notifType {
+	case "posts":
+		colors.PostEmbedColor = int(colorInt)
+	case "live":
+		colors.LiveEmbedColor = int(colorInt)
+	default:
+		// This should not happen due to command choices, but it's good practice
+		b.editInteractionResponse(s, i, "Invalid notification type selected.")
+		return
+	}
+
+	// 6. Upsert the changes back to the database
+	if err := repo.UpsertEmbedColors(colors); err != nil {
+		log.Printf("Error upserting embed colors: %v", err)
+		b.editInteractionResponse(s, i, "Failed to save the new color setting to the database.")
+		return
+	}
+
+	// 7. Send a success confirmation
+	responseMessage := fmt.Sprintf(
+		"✅ Successfully set the **%s** notification color for **%s** to `%s`.",
+		notifType,
+		username,
+		strings.ToUpper(colorHex),
+	)
+	b.editInteractionResponse(s, i, responseMessage)
 }
 
 func (b *Bot) handleServersCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {

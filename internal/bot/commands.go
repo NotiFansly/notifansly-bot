@@ -177,6 +177,40 @@ func (b *Bot) registerCommands() {
 				},
 			},
 		},
+		{
+			Name:        "setcolor",
+			Description: "Set a custom embed color for a creator's notifications.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "username",
+					Description: "The username of the creator to update.",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "type",
+					Description: "The notification type to set the color for.",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "Posts",
+							Value: "posts",
+						},
+						{
+							Name:  "Live",
+							Value: "live",
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "color",
+					Description: "The hex color code (e.g., #5865F2 or #EB459E).",
+					Required:    true,
+				},
+			},
+		},
 		// --- NEW BOT OWNER COMMANDS ---
 		{
 			Name:        "servers",

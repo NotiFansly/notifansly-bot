@@ -9,14 +9,19 @@ import (
 	"github.com/fvckgrimm/discord-fansly-notify/api"
 )
 
-func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avatarLocation string, liveImageURL string) *discordgo.MessageEmbed {
+func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avatarLocation string, liveImageURL string, color int) *discordgo.MessageEmbed {
 	liveURL := fmt.Sprintf("https://fansly.com/live/%s", username)
 	creatorUrl := fmt.Sprintf("https://fansly.com/%s", username)
+
+	embedColor := 0x03b2f8
+	if color != 0 {
+		embedColor = color
+	}
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Stream Live!",
 		URL:         liveURL,
-		Color:       0x03b2f8,
+		Color:       embedColor,
 		Description: fmt.Sprintf("%s is now live on Fansly!", username),
 		Author: &discordgo.MessageEmbedAuthor{
 			URL:     creatorUrl,
@@ -50,15 +55,20 @@ func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avat
 	return embed
 }
 
-func CreatePostEmbed(username string, post api.Post, avatarLocation string, postMedia []api.AccountMedia) *discordgo.MessageEmbed {
+func CreatePostEmbed(username string, post api.Post, avatarLocation string, postMedia []api.AccountMedia, color int) *discordgo.MessageEmbed {
 	postURL := fmt.Sprintf("https://fans.ly/post/%s", post.ID)
 	creatorUrl := fmt.Sprintf("https://fansly.com/%s", username)
 	createdTime := time.Unix(post.CreatedAt, 0)
 
+	embedColor := 0x03b2f8
+	if color != 0 {
+		embedColor = color
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("New post from %s", username),
 		URL:         postURL,
-		Color:       0x03b2f8,
+		Color:       embedColor,
 		Description: post.Content,
 		Author: &discordgo.MessageEmbedAuthor{
 			URL:     creatorUrl,

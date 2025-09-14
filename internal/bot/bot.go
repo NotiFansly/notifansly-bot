@@ -202,6 +202,12 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 		return
 	}
 
+	colorsMap, err := b.Repo.GetEmbedColorsForUser(primaryUser.UserID)
+	if err != nil {
+		log.Printf("Could not fetch embed colors for user %s: %v", primaryUser.Username, err)
+		// We can continue without custom colors, so we don't return.
+	}
+
 	// Check if it's a new stream
 	if streamInfo.Response.Stream.Status == 2 && streamInfo.Response.Stream.StartedAt > primaryUser.LastStreamStart {
 		// Send notifications to all servers that have this user monitored with live enabled
@@ -212,7 +218,12 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 				continue
 			}
 
-			embedMsg := embed.CreateLiveStreamEmbed(user.Username, streamInfo, user.AvatarLocation, user.LiveImageURL)
+			var embedColor int // Defaults to 0
+			if colorSetting, ok := colorsMap[user.GuildID]; ok {
+				embedColor = colorSetting.LiveEmbedColor
+			}
+
+			embedMsg := embed.CreateLiveStreamEmbed(user.Username, streamInfo, user.AvatarLocation, user.LiveImageURL, embedColor)
 
 			// If a role is set, create the mention string. Otherwise, it's empty.
 			var mention string
@@ -266,6 +277,11 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 
 	latestPost := latestPosts[0]
 
+	colorsMap, err := b.Repo.GetEmbedColorsForUser(primaryUser.UserID)
+	if err != nil {
+		log.Printf("Could not fetch embed colors for user %s: %v", primaryUser.Username, err)
+	}
+
 	// Now, iterate through each server monitoring this user
 	for _, user := range postEnabledUsers {
 		// Check if this specific server has seen this post yet.
@@ -280,8 +296,13 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 			// This flag is still useful for logging, but we won't use it to suppress the ping.
 			isFirstPostForThisServer := user.LastPostID == "" || user.LastPostID == "0"
 
+			var embedColor int // Defaults to 0
+			if colorSetting, ok := colorsMap[user.GuildID]; ok {
+				embedColor = colorSetting.PostEmbedColor
+			}
+
 			// Pass nil for postMedia, as we are no longer fetching it.
-			embedMsg := embed.CreatePostEmbed(user.Username, latestPost, user.AvatarLocation, nil)
+			embedMsg := embed.CreatePostEmbed(user.Username, latestPost, user.AvatarLocation, nil, embedColor)
 
 			// If a role is set, create the mention string. Otherwise, it's empty.
 			var mention string

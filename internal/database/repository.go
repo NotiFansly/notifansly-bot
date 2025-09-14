@@ -19,6 +19,55 @@ func NewRepository() *Repository {
 	return &Repository{db: DB}
 }
 
+func (r *Repository) UpsertEmbedColors(colors *models.UserEmbedColor) error {
+	return WithRetry(func() error {
+		return r.db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "guild_id"}, {Name: "user_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"post_embed_color", "live_embed_color"}),
+		}).Create(colors).Error
+	})
+}
+
+// GetEmbedColors retrieves the custom embed colors for a specific user in a guild.
+// It returns (nil, nil) if no record is found, which is not an error.
+func (r *Repository) GetEmbedColors(guildID, userID string) (*models.UserEmbedColor, error) {
+	var colors models.UserEmbedColor
+	err := WithRetry(func() error {
+		result := r.db.Where("guild_id = ? AND user_id = ?", guildID, userID).First(&colors)
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil // Not found is not an error, we'll return a nil pointer
+		}
+		return result.Error
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	// Check if the record was actually found after retries
+	if colors.GuildID == "" {
+		return nil, nil
+	}
+	return &colors, nil
+}
+
+// GetEmbedColorsForUser fetches all custom embed color settings for a given user ID.
+// It returns a map where the key is the GuildID.
+func (r *Repository) GetEmbedColorsForUser(userID string) (map[string]models.UserEmbedColor, error) {
+	var results []models.UserEmbedColor
+	err := WithRetry(func() error {
+		return r.db.Where("user_id = ?", userID).Find(&results).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	colorMap := make(map[string]models.UserEmbedColor)
+	for _, r := range results {
+		colorMap[r.GuildID] = r
+	}
+	return colorMap, nil
+}
+
 func (r *Repository) UpsertServiceStatus(status *models.ServiceStatus) error {
 	return WithRetry(func() error {
 		// GORM's Save works as an upsert for records with a primary key.
@@ -97,7 +146,7 @@ func (r *Repository) GetMonitoredUser(guildID, userID string) (*models.Monitored
 func (r *Repository) GetMonitoredUserByUsername(guildID, username string) (*models.MonitoredUser, error) {
 	var user models.MonitoredUser
 	err := WithRetry(func() error {
-		result := r.db.Where("guild_id = ? AND username = ?", guildID, username).First(&user)
+		result := r.db.Where("guild_id = ? AND LOWER(username) = ?", guildID, username).First(&user)
 		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return result.Error
 		}
@@ -147,7 +196,7 @@ func (r *Repository) DeleteMonitoredUser(guildID, userID string) error {
 
 func (r *Repository) DeleteMonitoredUserByUsername(guildID, username string) error {
 	return WithRetry(func() error {
-		result := r.db.Delete(&models.MonitoredUser{}, "guild_id = ? AND username = ?", guildID, username)
+		result := r.db.Delete(&models.MonitoredUser{}, "guild_id = ? AND LOWER(username) = ?", guildID, username)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -224,7 +273,7 @@ func (r *Repository) UpdateAvatarInfo(guildID, userID, avatarLocation string) er
 func (r *Repository) UpdateLastPostIDByUsername(guildID, username, postID string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("last_post_id", postID)
 		if result.Error != nil {
 			return result.Error
@@ -239,7 +288,7 @@ func (r *Repository) UpdateLastPostIDByUsername(guildID, username, postID string
 func (r *Repository) UpdateAvatarInfoByUsername(guildID, username, avatarLocation string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Updates(map[string]any{
 				"avatar_location":            avatarLocation,
 				"avatar_location_updated_at": time.Now().Unix(),
@@ -257,7 +306,7 @@ func (r *Repository) UpdateAvatarInfoByUsername(guildID, username, avatarLocatio
 func (r *Repository) DisablePostsByUsername(guildID, username string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("posts_enabled", false)
 		if result.Error != nil {
 			return result.Error
@@ -272,7 +321,7 @@ func (r *Repository) DisablePostsByUsername(guildID, username string) error {
 func (r *Repository) EnablePostsByUsername(guildID, username string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("posts_enabled", true)
 		if result.Error != nil {
 			return result.Error
@@ -287,7 +336,7 @@ func (r *Repository) EnablePostsByUsername(guildID, username string) error {
 func (r *Repository) DisableLiveByUsername(guildID, username string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("live_enabled", false)
 		if result.Error != nil {
 			return result.Error
@@ -302,7 +351,7 @@ func (r *Repository) DisableLiveByUsername(guildID, username string) error {
 func (r *Repository) EnableLiveByUsername(guildID, username string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("live_enabled", true)
 		if result.Error != nil {
 			return result.Error
@@ -339,7 +388,7 @@ func (r *Repository) DeleteAllUsersInGuild(guildID string) error {
 func (r *Repository) UpdateLiveImageURL(guildID, username, imageURL string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("live_image_url", imageURL)
 		if result.Error != nil {
 			return result.Error
@@ -354,7 +403,7 @@ func (r *Repository) UpdateLiveImageURL(guildID, username, imageURL string) erro
 func (r *Repository) UpdatePostChannel(guildID, username, channelID string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("post_notification_channel", channelID)
 		if result.Error != nil {
 			return result.Error
@@ -369,7 +418,7 @@ func (r *Repository) UpdatePostChannel(guildID, username, channelID string) erro
 func (r *Repository) UpdateLiveChannel(guildID, username, channelID string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("live_notification_channel", channelID)
 		if result.Error != nil {
 			return result.Error
@@ -384,7 +433,7 @@ func (r *Repository) UpdateLiveChannel(guildID, username, channelID string) erro
 func (r *Repository) UpdatePostMentionRole(guildID, username, roleID string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("post_mention_role", roleID)
 		if result.Error != nil {
 			return result.Error
@@ -399,7 +448,7 @@ func (r *Repository) UpdatePostMentionRole(guildID, username, roleID string) err
 func (r *Repository) UpdateLiveMentionRole(guildID, username, roleID string) error {
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
-			Where("guild_id = ? AND username = ?", guildID, username).
+			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
 			Update("live_mention_role", roleID)
 		if result.Error != nil {
 			return result.Error

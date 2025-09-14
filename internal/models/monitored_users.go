@@ -52,6 +52,17 @@ type APIHealthStat struct {
 	LastResetAt        time.Time `gorm:"column:last_reset_at"`
 }
 
+type UserEmbedColor struct {
+	GuildID        string `gorm:"primaryKey;column:guild_id"`
+	UserID         string `gorm:"primaryKey;column:user_id"`
+	PostEmbedColor int    `gorm:"column:post_embed_color"`
+	LiveEmbedColor int    `gorm:"column:live_embed_color"`
+}
+
+func (UserEmbedColor) TableName() string {
+	return "user_embed_colors"
+}
+
 func (APIHealthStat) TableName() string {
 	return "api_health_stats"
 }
