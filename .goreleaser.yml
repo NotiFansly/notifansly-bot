@@ -1,8 +1,8 @@
 version: 2
 
 builds:
-  - main: ./cmd/fansly-notify
-    binary: discord-fansly-notify
+  - main: ./cmd/notifansly
+    binary: notifansly-bot
     goos:
       - linux
       - windows
