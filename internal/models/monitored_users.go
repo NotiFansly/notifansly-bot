@@ -38,15 +38,26 @@ type ServiceStatus struct {
 	Details       string    `gorm:"column:details"`
 }
 
-func (ServiceStatus) TableName() string {
-	return "service_status"
-}
-
 // SystemStat holds key-value pairs for system-wide statistics.
 type SystemStat struct {
 	StatKey   string    `gorm:"primaryKey;column:stat_key"`
 	StatValue int64     `gorm:"column:stat_value"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
+}
+
+type APIHealthStat struct {
+	ServiceName        string    `gorm:"primaryKey;column:service_name"`
+	TotalRequests      int64     `gorm:"column:total_requests"`
+	SuccessfulRequests int64     `gorm:"column:successful_requests"`
+	LastResetAt        time.Time `gorm:"column:last_reset_at"`
+}
+
+func (APIHealthStat) TableName() string {
+	return "api_health_stats"
+}
+
+func (ServiceStatus) TableName() string {
+	return "service_status"
 }
 
 func (SystemStat) TableName() string {

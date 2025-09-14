@@ -86,7 +86,7 @@ func (b *Bot) guildDelete(s *discordgo.Session, event *discordgo.GuildDelete) {
 }
 
 func (b *Bot) heartbeat() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -232,7 +232,7 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 			if err != nil {
 				b.logNotificationError("live stream", user, targetChannel, err)
 			} else {
-				go b.Repo.IncrementNotificationCount()
+				go b.Repo.IncrementLiveCount()
 			}
 		}
 	}
@@ -303,7 +303,7 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 			if err != nil {
 				b.logNotificationError("post", user, targetChannel, err)
 			} else {
-				go b.Repo.IncrementNotificationCount()
+				go b.Repo.IncrementPostCount()
 			}
 		}
 	}

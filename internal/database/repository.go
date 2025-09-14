@@ -27,14 +27,43 @@ func (r *Repository) UpsertServiceStatus(status *models.ServiceStatus) error {
 }
 
 // IncrementNotificationCount atomically increments the total notification count.
-func (r *Repository) IncrementNotificationCount() error {
+func (r *Repository) IncrementPostCount() error {
 	return WithRetry(func() error {
 		return r.db.Model(&models.SystemStat{}).
-			Where("stat_key = ?", "total_notifications_sent").
-			Updates(map[string]interface{}{
+			Where("stat_key = ?", "total_posts_sent").
+			Updates(map[string]any{
 				"stat_value": gorm.Expr("stat_value + 1"),
 				"updated_at": time.Now(),
 			}).Error
+	})
+}
+
+// IncrementLiveCount atomically increments the total live stream notification count.
+func (r *Repository) IncrementLiveCount() error {
+	return WithRetry(func() error {
+		return r.db.Model(&models.SystemStat{}).
+			Where("stat_key = ?", "total_live_sent").
+			Updates(map[string]any{
+				"stat_value": gorm.Expr("stat_value + 1"),
+				"updated_at": time.Now(),
+			}).Error
+	})
+}
+
+// --- ADD THIS NEW METHOD for API Health ---
+
+// RecordAPIHealth records the outcome of an API call.
+func (r *Repository) RecordAPIHealth(serviceName string, success bool) error {
+	return WithRetry(func() error {
+		updates := map[string]any{
+			"total_requests": gorm.Expr("total_requests + 1"),
+		}
+		if success {
+			updates["successful_requests"] = gorm.Expr("successful_requests + 1")
+		}
+		return r.db.Model(&models.APIHealthStat{}).
+			Where("service_name = ?", serviceName).
+			Updates(updates).Error
 	})
 }
 
