@@ -1,5 +1,5 @@
 .env
-notifansly
+/notifansly
 fansly_notify
 bot.db*
 bot.db-journal
