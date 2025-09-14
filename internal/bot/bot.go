@@ -10,6 +10,7 @@ import (
 	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
 	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
 	"github.com/fvckgrimm/discord-fansly-notify/internal/embed"
+	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
 	"github.com/fvckgrimm/discord-fansly-notify/internal/models"
 )
 
@@ -19,13 +20,13 @@ type Bot struct {
 	Repo      *database.Repository
 }
 
-func New() (*Bot, error) {
+func New(aggregator *health.Aggregator) (*Bot, error) {
 	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
 		return nil, err
 	}
 
-	apiClient, _ := api.NewClient(config.FanslyToken, config.UserAgent)
+	apiClient, _ := api.NewClient(config.FanslyToken, config.UserAgent, aggregator)
 
 	bot := &Bot{
 		Session:   discord,

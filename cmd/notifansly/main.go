@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/fvckgrimm/discord-fansly-notify/internal/bot"
 	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
 	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
+	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
 )
 
 func main() {
@@ -20,7 +22,12 @@ func main() {
 	}
 	defer database.Close()
 
-	bot, err := bot.New()
+	repo := database.NewRepository()
+
+	fanslyAggregator := health.NewAggregator(repo, "fansly_api")
+	fanslyAggregator.Start(30 * time.Second)
+
+	bot, err := bot.New(fanslyAggregator)
 	if err != nil {
 		log.Fatalf("Error creating bot: %v", err)
 	}

@@ -101,6 +101,22 @@ func (r *Repository) IncrementLiveCount() error {
 
 // --- ADD THIS NEW METHOD for API Health ---
 
+func (r *Repository) UpdateAPIHealthBulk(serviceName string, totalToAdd, successfulToAdd uint64) error {
+	if totalToAdd == 0 && successfulToAdd == 0 {
+		return nil
+	}
+
+	return WithRetry(func() error {
+		updates := map[string]interface{}{
+			"total_requests":      gorm.Expr("total_requests + ?", totalToAdd),
+			"successful_requests": gorm.Expr("successful_requests + ?", successfulToAdd),
+		}
+		return r.db.Model(&models.APIHealthStat{}).
+			Where("service_name = ?", serviceName).
+			Updates(updates).Error
+	})
+}
+
 // RecordAPIHealth records the outcome of an API call.
 func (r *Repository) RecordAPIHealth(serviceName string, success bool) error {
 	return WithRetry(func() error {

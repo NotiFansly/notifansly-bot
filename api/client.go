@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
+	//"github.com/fvckgrimm/discord-fansly-notify/internal/database"
+	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
 	"golang.org/x/time/rate"
 )
 
@@ -24,7 +25,7 @@ type Client struct {
 	SessionID  string
 	CheckKey   string
 	Limiter    *rate.Limiter
-	repo       *database.Repository
+	aggregator *health.Aggregator
 }
 
 type AccountInfo struct {
@@ -60,7 +61,7 @@ type FanslyResponse struct {
 	Error   FanslyError `json:"error"`
 }
 
-func NewClient(token, userAgent string) (*Client, error) {
+func NewClient(token, userAgent string, aggregator *health.Aggregator) (*Client, error) {
 	limit := rate.Limit(config.ApiRequestsPerSecond)
 	limiter := rate.NewLimiter(limit, config.ApiBurst)
 
@@ -70,7 +71,7 @@ func NewClient(token, userAgent string) (*Client, error) {
 		Token:      token,
 		UserAgent:  userAgent,
 		Limiter:    limiter,
-		repo:       database.NewRepository(),
+		aggregator: aggregator,
 	}
 
 	deviceID, err := client.getDeviceID()
@@ -125,7 +126,9 @@ func (c *Client) sendRequest(req *http.Request) (*http.Response, error) {
 	// We check if the request was successful and pass that boolean to the health recorder.
 	// This is safer as it prevents nil pointer panics if `resp` is nil.
 	success := err == nil && resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300
-	go c.repo.RecordAPIHealth("fansly_api", success)
+	if c.aggregator != nil {
+		c.aggregator.RecordCall(success)
+	}
 
 	return resp, err
 }
