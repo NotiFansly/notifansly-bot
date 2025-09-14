@@ -137,7 +137,7 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 			existingUser, _ := b.Repo.GetMonitoredUserByUsername(i.GuildID, username)
 			if existingUser == nil {
 				message := fmt.Sprintf(
-					"This server is at its limit of %d monitored creators. If your subscription has expired, you can manage your plan here: <https://beta.notifansly.xyz/dashboard/server/%s/billing>",
+					"This server is at its limit of %d monitored creators. If your subscription has expired, you can manage your plan here: <https://notifansly.xyz/dashboard/server/%s/billing>",
 					guildLimit,
 					i.GuildID,
 				)
