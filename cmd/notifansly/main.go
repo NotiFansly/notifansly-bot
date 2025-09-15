@@ -13,8 +13,12 @@ import (
 	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
 )
 
+const version = "v0.1.0"
+
 func main() {
 	config.Load()
+
+	log.Printf("Welcome to notifansly, version: %s", version)
 
 	err := database.Init(config.DatabaseType, config.GetDatabaseConnectionString())
 	if err != nil {
