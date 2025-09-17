@@ -100,6 +100,7 @@ func Init(dbType string, connString string) error {
 		&models.SystemStat{},
 		&models.APIHealthStat{},
 		&models.UserEmbedColor{},
+		&models.UserNotificationFormat{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to migrate database schema: %w", err)

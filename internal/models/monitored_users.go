@@ -59,6 +59,17 @@ type UserEmbedColor struct {
 	LiveEmbedColor int    `gorm:"column:live_embed_color"`
 }
 
+type UserNotificationFormat struct {
+	GuildID           string `gorm:"primaryKey;column:guild_id"`
+	UserID            string `gorm:"primaryKey;column:user_id"`
+	PostMessageFormat string `gorm:"column:post_message_format"`
+	LiveMessageFormat string `gorm:"column:live_message_format"`
+}
+
+func (UserNotificationFormat) TableName() string {
+	return "user_notification_formats"
+}
+
 func (UserEmbedColor) TableName() string {
 	return "user_embed_colors"
 }

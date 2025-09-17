@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -69,8 +70,6 @@ func (b *Bot) guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 }
 
 func (b *Bot) guildDelete(s *discordgo.Session, event *discordgo.GuildDelete) {
-	// This event fires when the bot is kicked, banned, or the guild is deleted.
-	// If event.Unavailable is true, it means a Discord outage, so we shouldn't delete data.
 	if !event.Unavailable {
 		log.Printf("Bot removed from guild: %s. Cleaning up associated data.", event.ID)
 		err := b.Repo.DeleteAllUsersInGuild(event.ID)
@@ -110,16 +109,14 @@ func (b *Bot) monitorUsers() {
 
 	numWorkers := config.MonitorWorkerCount
 	if numWorkers <= 0 {
-		numWorkers = 1 // Ensure at least one worker.
+		numWorkers = 1
 	}
-	jobs := make(chan []models.MonitoredUser, 100) // Buffered channel
+	jobs := make(chan []models.MonitoredUser, 100)
 
-	// Start long-lived workers that will process jobs as they come in.
 	for w := 1; w <= numWorkers; w++ {
 		go b.worker(w, jobs)
 	}
 
-	// Run the first check immediately on bot start, then on every tick.
 	log.Println("Dispatching initial monitoring cycle...")
 	b.dispatchMonitoringJobs(jobs)
 
@@ -135,7 +132,6 @@ func (b *Bot) dispatchMonitoringJobs(jobs chan<- []models.MonitoredUser) {
 		return
 	}
 
-	// Group users by UserID to deduplicate API calls
 	userGroups := make(map[string][]models.MonitoredUser)
 	for _, user := range users {
 		userGroups[user.UserID] = append(userGroups[user.UserID], user)
@@ -143,47 +139,87 @@ func (b *Bot) dispatchMonitoringJobs(jobs chan<- []models.MonitoredUser) {
 
 	log.Printf("Dispatching %d unique users to %d workers.", len(userGroups), config.MonitorWorkerCount)
 
-	// Send each group of users as a single job to the workers channel.
 	for _, userEntries := range userGroups {
 		jobs <- userEntries
 	}
 }
 
-// New worker function in bot.go
 func (b *Bot) worker(id int, jobs <-chan []models.MonitoredUser) {
 	avatarRefreshDuration := int64(config.AvatarRefreshIntervalHours * 60 * 60)
 
 	for userEntries := range jobs {
 		primaryUser := userEntries[0]
 
-		// Check if avatar needs refreshing
 		if time.Now().Unix()-primaryUser.AvatarLocationUpdatedAt > avatarRefreshDuration {
 			newAvatarLocation, err := b.refreshAvatarURL(primaryUser.Username)
 			if err != nil {
 				log.Printf("[Worker %d] Error refreshing avatar URL for %s: %v", id, primaryUser.Username, err)
 			} else {
-				// Update avatar for all entries of this user
 				for _, user := range userEntries {
 					err = b.Repo.UpdateAvatarInfo(user.GuildID, user.UserID, newAvatarLocation)
 					if err != nil {
 						log.Printf("[Worker %d] Error updating avatar URL in DB for %s in guild %s: %v", id, user.Username, user.GuildID, err)
 					}
 				}
-				// Update the avatar in memory for the current cycle's checks
 				for i := range userEntries {
 					userEntries[i].AvatarLocation = newAvatarLocation
 				}
 			}
 		}
 
-		// Check live stream and posts. These API calls now happen in parallel for different users.
 		b.checkUserLiveStreamOptimized(userEntries)
 		b.checkUserPostsOptimized(userEntries)
 	}
 }
 
+// formatNotificationMessage processes the custom message format and ensures a mention role is always included if set.
+func (b *Bot) formatNotificationMessage(guildID, userID, username, mentionRole, placeholder string) string {
+	// 1. Fetch the custom format from the database
+	formats, err := b.Repo.GetNotificationFormats(guildID, userID)
+	if err != nil {
+		log.Printf("Could not fetch notification formats for user %s in guild %s: %v", userID, guildID, err)
+	}
+
+	var customFormat string
+	if formats != nil {
+		if placeholder == "{postMention}" {
+			customFormat = formats.PostMessageFormat
+		} else if placeholder == "{liveMention}" {
+			customFormat = formats.LiveMessageFormat
+		}
+	}
+
+	// 2. Prepare the role mention string, if a role is set
+	roleMention := ""
+	if mentionRole != "" {
+		roleMention = fmt.Sprintf("<@&%s>", mentionRole)
+	}
+
+	// 3. Process the final message content
+	if customFormat != "" {
+		// A custom format exists. First, replace the username placeholder.
+		processedMessage := strings.Replace(customFormat, "{username}", username, -1)
+
+		// Check if the user manually included the mention placeholder in their format.
+		if strings.Contains(customFormat, placeholder) {
+			// They did, so we just replace it with the role mention (or an empty string if no role is set).
+			return strings.Replace(processedMessage, placeholder, roleMention, -1)
+		} else {
+			// They did NOT include the placeholder. We should prepend the mention role if it exists.
+			if roleMention != "" {
+				// Combine the mention and their custom message.
+				return fmt.Sprintf("%s %s", roleMention, processedMessage)
+			}
+			// If no role is set, just return their custom message.
+			return processedMessage
+		}
+	}
+
+	// 4. No custom format was set. Default behavior is to just send the mention role, if any.
+	return roleMention
+}
+
 func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
-	// Filter entries that have live notifications enabled
 	liveEnabledUsers := make([]models.MonitoredUser, 0)
 	for _, user := range userEntries {
 		if user.LiveEnabled {
@@ -195,7 +231,6 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 		return
 	}
 
-	// Make API call only once
 	primaryUser := liveEnabledUsers[0]
 	streamInfo, err := b.APIClient.GetStreamInfo(primaryUser.UserID)
 	if err != nil {
@@ -206,12 +241,9 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 	colorsMap, err := b.Repo.GetEmbedColorsForUser(primaryUser.UserID)
 	if err != nil {
 		log.Printf("Could not fetch embed colors for user %s: %v", primaryUser.Username, err)
-		// We can continue without custom colors, so we don't return.
 	}
 
-	// Check if it's a new stream
 	if streamInfo.Response.Stream.Status == 2 && streamInfo.Response.Stream.StartedAt > primaryUser.LastStreamStart {
-		// Send notifications to all servers that have this user monitored with live enabled
 		for _, user := range liveEnabledUsers {
 			err = b.Repo.UpdateLastStreamStart(user.GuildID, user.UserID, streamInfo.Response.Stream.StartedAt)
 			if err != nil {
@@ -219,18 +251,15 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 				continue
 			}
 
-			var embedColor int // Defaults to 0
+			var embedColor int
 			if colorSetting, ok := colorsMap[user.GuildID]; ok {
 				embedColor = colorSetting.LiveEmbedColor
 			}
 
 			embedMsg := embed.CreateLiveStreamEmbed(user.Username, streamInfo, user.AvatarLocation, user.LiveImageURL, embedColor)
 
-			// If a role is set, create the mention string. Otherwise, it's empty.
-			var mention string
-			if user.LiveMentionRole != "" {
-				mention = fmt.Sprintf("<@&%s>", user.LiveMentionRole)
-			}
+			// --- FIXED THIS LINE ---
+			mentionContent := b.formatNotificationMessage(user.GuildID, user.UserID, user.Username, user.LiveMentionRole, "{liveMention}")
 
 			targetChannel := user.LiveNotificationChannel
 			if targetChannel == "" {
@@ -238,7 +267,7 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 			}
 
 			_, err = b.Session.ChannelMessageSendComplex(targetChannel, &discordgo.MessageSend{
-				Content: mention,
+				Content: mentionContent,
 				Embed:   embedMsg,
 			})
 			if err != nil {
@@ -251,7 +280,6 @@ func (b *Bot) checkUserLiveStreamOptimized(userEntries []models.MonitoredUser) {
 }
 
 func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
-	// Filter entries that have post notifications enabled
 	postEnabledUsers := make([]models.MonitoredUser, 0)
 	for _, user := range userEntries {
 		if user.PostsEnabled {
@@ -263,7 +291,6 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 		return
 	}
 
-	// Make API call only once per unique user ID
 	primaryUser := postEnabledUsers[0]
 	latestPosts, err := b.APIClient.GetTimelinePost(primaryUser.UserID)
 	if err != nil {
@@ -271,7 +298,6 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 		return
 	}
 
-	// If there are no posts on the timeline at all, do nothing.
 	if len(latestPosts) == 0 {
 		return
 	}
@@ -283,33 +309,25 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 		log.Printf("Could not fetch embed colors for user %s: %v", primaryUser.Username, err)
 	}
 
-	// Now, iterate through each server monitoring this user
 	for _, user := range postEnabledUsers {
-		// Check if this specific server has seen this post yet.
 		if latestPost.ID != user.LastPostID {
-			// This server needs a notification. First, update its state.
 			err := b.Repo.UpdateLastPostID(user.GuildID, user.UserID, latestPost.ID)
 			if err != nil {
 				log.Printf("Error updating last post ID for %s in guild %s: %v", user.Username, user.GuildID, err)
-				continue // Skip this server if DB update fails
+				continue
 			}
 
-			// This flag is still useful for logging, but we won't use it to suppress the ping.
 			isFirstPostForThisServer := user.LastPostID == "" || user.LastPostID == "0"
 
-			var embedColor int // Defaults to 0
+			var embedColor int
 			if colorSetting, ok := colorsMap[user.GuildID]; ok {
 				embedColor = colorSetting.PostEmbedColor
 			}
 
-			// Pass nil for postMedia, as we are no longer fetching it.
 			embedMsg := embed.CreatePostEmbed(user.Username, latestPost, user.AvatarLocation, nil, embedColor)
 
-			// If a role is set, create the mention string. Otherwise, it's empty.
-			var mention string
-			if user.PostMentionRole != "" {
-				mention = fmt.Sprintf("<@&%s>", user.PostMentionRole)
-			}
+			// --- FIXED THIS LINE ---
+			mentionContent := b.formatNotificationMessage(user.GuildID, user.UserID, user.Username, user.PostMentionRole, "{postMention}")
 
 			targetChannel := user.PostNotificationChannel
 			if targetChannel == "" {
@@ -319,7 +337,7 @@ func (b *Bot) checkUserPostsOptimized(userEntries []models.MonitoredUser) {
 			log.Printf("Sending post notification for %s to guild %s. First post: %t", user.Username, user.GuildID, isFirstPostForThisServer)
 
 			_, err = b.Session.ChannelMessageSendComplex(targetChannel, &discordgo.MessageSend{
-				Content: mention,
+				Content: mentionContent,
 				Embed:   embedMsg,
 			})
 			if err != nil {

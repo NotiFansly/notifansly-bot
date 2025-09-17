@@ -86,13 +86,17 @@ func (b *Bot) interactionCreate(s *discordgo.Session, i *discordgo.InteractionCr
 			b.handleLeaveCommand(s, i)
 		case "setlimit":
 			b.handleSetLimitCommand(s, i)
+		case "setformat":
+			b.handleSetFormatCommand(s, i)
 		}
 
 	case discordgo.InteractionMessageComponent:
 		// All button clicks and other components fall here.
-		// The specific handler for pagination is registered in `pagination.go`
-		// and will pick up the event. We don't need to do anything else here.
-		// This case prevents the code from panicking and allows the event to be processed correctly.
+	case discordgo.InteractionModalSubmit:
+		// Handle submissions from our new modal
+		if strings.HasPrefix(i.ModalSubmitData().CustomID, "format_modal_") {
+			b.handleFormatModalSubmit(s, i)
+		}
 	}
 }
 
@@ -118,13 +122,11 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	guildLimit := config.MaxMonitoredUsersPerGuild
 	subscription, err := b.Repo.GetGuildSubscription(i.GuildID)
 	if err == nil && subscription != nil {
-		// Check if the subscription is still valid
 		if time.Now().Unix() < subscription.ExpiresAt {
 			guildLimit = subscription.UserLimit
 		}
 	}
 
-	// Check if the limit is enabled (a value > 0)
 	if guildLimit > 0 {
 		count, err := b.Repo.CountMonitoredUsersForGuild(i.GuildID)
 		if err != nil {
@@ -152,7 +154,6 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 
-	// Defer the response to prevent a timeout. The final response will be public.
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
@@ -161,7 +162,6 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 
-	// Run all long-running tasks in a goroutine so the handler returns immediately.
 	go func() {
 		channel := options[1].ChannelValue(s)
 		var mentionRole string
@@ -172,24 +172,22 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		}
 
 		if config.LogChannelID != "" {
-			// Declare guildName in the outer scope
 			var guildName string
 			guild, err := s.Guild(i.GuildID)
 			if err != nil {
 				log.Printf("Could not retrieve guild details for ID %s: %v", i.GuildID, err)
-				guildName = "Unknown Server" // Fallback value
+				guildName = "Unknown Server"
 			} else {
 				guildName = guild.Name
 			}
 
-			// Now guildName is accessible here
 			logMessage := fmt.Sprintf(
 				"`[%s]` User <@%s> (`%s`) added a creator:\n**Creator:** `%s`\n**Server:** %s (`%s`)",
 				time.Now().Format("2006-01-02 15:04:05"),
 				i.Member.User.ID,
 				i.Member.User.Username,
 				username,
-				guildName, // This now works correctly
+				guildName,
 				i.GuildID,
 			)
 			_, logErr := s.ChannelMessageSend(config.LogChannelID, logMessage)
@@ -222,7 +220,6 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		timelineAccessible := timelineErr == nil && len(timelinePosts) >= 0
 
 		if !timelineAccessible {
-			// Try to follow the account to gain access
 			if myAccount, err := b.APIClient.GetMyAccountInfo(); err == nil && myAccount.ID != "" {
 				if following, err := b.APIClient.GetFollowing(myAccount.ID); err == nil {
 					isFollowing := false
@@ -313,7 +310,6 @@ func (b *Bot) handleAddCommand(s *discordgo.Session, i *discordgo.InteractionCre
 }
 
 func (b *Bot) handleSetColorCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Defer response as we need to query the database
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
@@ -327,20 +323,17 @@ func (b *Bot) handleSetColorCommand(s *discordgo.Session, i *discordgo.Interacti
 	notifType := options[1].StringValue()
 	colorHex := options[2].StringValue()
 
-	// 1. Validate the hex color code
 	if !hexColorRegex.MatchString(colorHex) {
 		b.editInteractionResponse(s, i, "Invalid hex color format. Please use `#[6-digit code]`, for example: `#5865F2`.")
 		return
 	}
 
-	// 2. Convert hex string to a decimal integer
 	colorInt, err := strconv.ParseInt(strings.TrimPrefix(colorHex, "#"), 16, 32)
 	if err != nil {
 		b.editInteractionResponse(s, i, "Could not parse the provided color. Please check the format.")
 		return
 	}
 
-	// 3. Find the creator in this server to get their UserID
 	repo := database.NewRepository()
 	monitoredUser, err := repo.GetMonitoredUserByUsername(i.GuildID, username)
 	if err != nil {
@@ -353,7 +346,6 @@ func (b *Bot) handleSetColorCommand(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 
-	// 4. Get existing color settings or create a new struct if none exist
 	colors, err := repo.GetEmbedColors(i.GuildID, monitoredUser.UserID)
 	if err != nil {
 		log.Printf("Error fetching existing embed colors for user %s: %v", monitoredUser.UserID, err)
@@ -361,33 +353,28 @@ func (b *Bot) handleSetColorCommand(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 	if colors == nil {
-		// No record exists, so we create a new one
 		colors = &models.UserEmbedColor{
 			GuildID: i.GuildID,
 			UserID:  monitoredUser.UserID,
 		}
 	}
 
-	// 5. Update the correct color field based on the 'type' option
 	switch notifType {
 	case "posts":
 		colors.PostEmbedColor = int(colorInt)
 	case "live":
 		colors.LiveEmbedColor = int(colorInt)
 	default:
-		// This should not happen due to command choices, but it's good practice
 		b.editInteractionResponse(s, i, "Invalid notification type selected.")
 		return
 	}
 
-	// 6. Upsert the changes back to the database
 	if err := repo.UpsertEmbedColors(colors); err != nil {
 		log.Printf("Error upserting embed colors: %v", err)
 		b.editInteractionResponse(s, i, "Failed to save the new color setting to the database.")
 		return
 	}
 
-	// 7. Send a success confirmation
 	responseMessage := fmt.Sprintf(
 		"✅ Successfully set the **%s** notification color for **%s** to `%s`.",
 		notifType,
@@ -412,7 +399,6 @@ func (b *Bot) handleServersCommand(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 
-	// Sort guilds by name for a cleaner list
 	sort.Slice(guilds, func(i, j int) bool {
 		return guilds[i].Name < guilds[j].Name
 	})
@@ -429,11 +415,9 @@ func (b *Bot) handleServersCommand(s *discordgo.Session, i *discordgo.Interactio
 		requestedPage = max(1, requestedPage)
 	}
 
-	// We can reuse the existing pagination logic!
 	b.sendPaginatedList(s, i, serverDetails, requestedPage)
 }
 
-// New handler for the /leave command
 func (b *Bot) handleLeaveCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -446,7 +430,6 @@ func (b *Bot) handleLeaveCommand(s *discordgo.Session, i *discordgo.InteractionC
 	identifier := i.ApplicationCommandData().Options[0].StringValue()
 	var targetGuild *discordgo.Guild
 
-	// Search for the guild by ID or name
 	for _, guild := range b.Session.State.Guilds {
 		if guild.ID == identifier || guild.Name == identifier {
 			targetGuild = guild
@@ -459,7 +442,6 @@ func (b *Bot) handleLeaveCommand(s *discordgo.Session, i *discordgo.InteractionC
 		return
 	}
 
-	// Leave the guild
 	err = s.GuildLeave(targetGuild.ID)
 	if err != nil {
 		log.Printf("Failed to leave guild %s (%s): %v", targetGuild.Name, targetGuild.ID, err)
@@ -774,7 +756,6 @@ func (b *Bot) handleSetLimitCommand(s *discordgo.Session, i *discordgo.Interacti
 	if durationDays > 0 {
 		expiresAt = time.Now().Add(time.Duration(durationDays) * 24 * time.Hour).Unix()
 	} else {
-		// A very far future date for "never"
 		expiresAt = time.Now().AddDate(100, 0, 0).Unix()
 	}
 
@@ -794,11 +775,112 @@ func (b *Bot) handleSetLimitCommand(s *discordgo.Session, i *discordgo.Interacti
 	b.editInteractionResponse(s, i, fmt.Sprintf("Successfully set user limit for server `%s` to **%d**.", guildID, limit))
 }
 
+func (b *Bot) handleSetFormatCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	username := options[0].StringValue()
+	notifType := options[1].StringValue()
+
+	user, err := b.Repo.GetMonitoredUserByUsername(i.GuildID, username)
+	if err != nil || user == nil {
+		b.respondToInteraction(s, i, fmt.Sprintf("Creator **%s** is not being monitored in this server.", username), true)
+		return
+	}
+
+	formats, _ := b.Repo.GetNotificationFormats(user.GuildID, user.UserID)
+	var currentFormat, modalTitle, placeholder, label string
+
+	if notifType == "posts" {
+		modalTitle = fmt.Sprintf("Set Post Format for %s", username)
+		label = "Post Notification Message"
+		placeholder = "e.g., Hey {postMention}, {username} just posted!"
+		if formats != nil {
+			currentFormat = formats.PostMessageFormat
+		}
+	} else { // "live"
+		modalTitle = fmt.Sprintf("Set Live Format for %s", username)
+		label = "Live Notification Message"
+		placeholder = "e.g., {liveMention}! {username} is now live!"
+		if formats != nil {
+			currentFormat = formats.LiveMessageFormat
+		}
+	}
+
+	// Use the original notifType ("posts" or "live") in the CustomID
+	customID := fmt.Sprintf("format_modal_%s_%s", notifType, user.UserID)
+
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: customID,
+			Title:    modalTitle,
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:    "message_format_input",
+							Label:       label,
+							Style:       discordgo.TextInputParagraph,
+							Placeholder: placeholder,
+							Value:       currentFormat,
+							Required:    false,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		log.Printf("Error responding with modal: %v", err)
+	}
+}
+
+func (b *Bot) handleFormatModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+
+	parts := strings.Split(data.CustomID, "_")
+	if len(parts) != 4 {
+		log.Printf("Received malformed modal custom ID: %s", data.CustomID)
+		return
+	}
+	notifType := parts[2] // This will now be "posts" or "live"
+	userID := parts[3]
+
+	messageFormat := data.Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+
+	formats, err := b.Repo.GetNotificationFormats(i.GuildID, userID)
+	if err != nil {
+		b.respondToInteraction(s, i, "Error fetching existing data. Please try again.", true)
+		return
+	}
+	if formats == nil {
+		formats = &models.UserNotificationFormat{
+			GuildID: i.GuildID,
+			UserID:  userID,
+		}
+	}
+
+	// Correctly check for "posts" (plural)
+	if notifType == "posts" {
+		formats.PostMessageFormat = messageFormat
+	} else if notifType == "live" {
+		formats.LiveMessageFormat = messageFormat
+	}
+
+	if err := b.Repo.UpsertNotificationFormats(formats); err != nil {
+		log.Printf("Error saving format to DB: %v", err)
+		b.respondToInteraction(s, i, "Failed to save the custom message format.", true)
+		return
+	}
+
+	responseMessage := fmt.Sprintf("✅ Successfully updated the **%s** notification message format.", notifType)
+	b.respondToInteraction(s, i, responseMessage, true)
+}
+
 func getRoleName(roleID string) string {
 	if roleID == "" || roleID == "0" {
 		return "None"
 	}
-	// Use role mention for clickable link
 	return fmt.Sprintf("<@&%s>", roleID)
 }
 
@@ -813,10 +895,9 @@ func (b *Bot) editInteractionResponse(s *discordgo.Session, i *discordgo.Interac
 
 func (b *Bot) hasAdminOrModPermissions(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
 	if i.GuildID == "" {
-		return false // No permissions in DMs
+		return false
 	}
 
-	// Check for administrator permission
 	if i.Member.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 		return true
 	}
@@ -825,7 +906,6 @@ func (b *Bot) hasAdminOrModPermissions(s *discordgo.Session, i *discordgo.Intera
 		return true
 	}
 
-	// Check if the user is the server owner
 	guild, err := s.State.Guild(i.GuildID)
 	if err == nil && guild.OwnerID == i.Member.User.ID {
 		return true

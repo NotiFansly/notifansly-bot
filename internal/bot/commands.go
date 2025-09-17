@@ -211,6 +211,34 @@ func (b *Bot) registerCommands() {
 				},
 			},
 		},
+		{
+			Name:        "setformat",
+			Description: "Set a custom notification message format for a creator.",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "username",
+					Description: "The username of the creator to update.",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "type",
+					Description: "The notification type to set the format for.",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "Posts",
+							Value: "posts",
+						},
+						{
+							Name:  "Live",
+							Value: "live",
+						},
+					},
+				},
+			},
+		},
 		// --- NEW BOT OWNER COMMANDS ---
 		{
 			Name:        "servers",

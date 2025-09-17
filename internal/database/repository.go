@@ -19,6 +19,50 @@ func NewRepository() *Repository {
 	return &Repository{db: DB}
 }
 
+// UpsertNotificationFormats creates or updates the custom message formats for a user.
+func (r *Repository) UpsertNotificationFormats(formats *models.UserNotificationFormat) error {
+	return WithRetry(func() error {
+		return r.db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "guild_id"}, {Name: "user_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"post_message_format", "live_message_format"}),
+		}).Create(formats).Error
+	})
+}
+
+// GetNotificationFormats retrieves custom message formats for a user.
+// Returns (nil, nil) if no record is found, which is not an error.
+func (r *Repository) GetNotificationFormats(guildID, userID string) (*models.UserNotificationFormat, error) {
+	var formats models.UserNotificationFormat
+	err := WithRetry(func() error {
+		result := r.db.Where("guild_id = ? AND user_id = ?", guildID, userID).First(&formats)
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil // Not found is not an error
+		}
+		return result.Error
+	})
+	if err != nil || formats.GuildID == "" {
+		return nil, err // Return nil if error or record is empty after retries
+	}
+	return &formats, nil
+}
+
+// GetNotificationFormatsForUser fetches all format settings for a given user ID across all guilds.
+func (r *Repository) GetNotificationFormatsForUser(userID string) (map[string]models.UserNotificationFormat, error) {
+	var results []models.UserNotificationFormat
+	err := WithRetry(func() error {
+		return r.db.Where("user_id = ?", userID).Find(&results).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	formatMap := make(map[string]models.UserNotificationFormat)
+	for _, r := range results {
+		formatMap[r.GuildID] = r
+	}
+	return formatMap, nil
+}
+
 func (r *Repository) UpsertEmbedColors(colors *models.UserEmbedColor) error {
 	return WithRetry(func() error {
 		return r.db.Clauses(clause.OnConflict{
@@ -210,15 +254,33 @@ func (r *Repository) DeleteMonitoredUser(guildID, userID string) error {
 	})
 }
 
+// MODIFIED: DeleteMonitoredUserByUsername to also clean up formats
 func (r *Repository) DeleteMonitoredUserByUsername(guildID, username string) error {
-	return WithRetry(func() error {
-		result := r.db.Delete(&models.MonitoredUser{}, "guild_id = ? AND LOWER(username) = ?", guildID, username)
-		if result.Error != nil {
-			return result.Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// First, find the user to get their ID for deleting related data
+		var user models.MonitoredUser
+		if err := tx.Where("guild_id = ? AND LOWER(username) = ?", guildID, username).First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("user not found")
+			}
+			return err
 		}
-		if result.RowsAffected == 0 {
-			return errors.New("user not found")
+
+		// Delete the format settings
+		if err := tx.Where("guild_id = ? AND user_id = ?", guildID, user.UserID).Delete(&models.UserNotificationFormat{}).Error; err != nil {
+			return err
 		}
+
+		// Delete the embed color settings
+		if err := tx.Where("guild_id = ? AND user_id = ?", guildID, user.UserID).Delete(&models.UserEmbedColor{}).Error; err != nil {
+			return err
+		}
+
+		// Finally, delete the monitored user
+		if err := tx.Where("guild_id = ? AND user_id = ?", guildID, user.UserID).Delete(&models.MonitoredUser{}).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
