@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fvckgrimm/discord-fansly-notify/internal/bot"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
+	"github.com/NotiFansly/notifansly-bot/internal/bot"
+	"github.com/NotiFansly/notifansly-bot/internal/config"
+	"github.com/NotiFansly/notifansly-bot/internal/database"
+	"github.com/NotiFansly/notifansly-bot/internal/health"
 )
 
 const version = "v0.1.1"

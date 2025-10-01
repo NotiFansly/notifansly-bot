@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/fvckgrimm/discord-fansly-notify/api"
+	"github.com/NotiFansly/notifansly-bot/api"
 )
 
 func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avatarLocation string, liveImageURL string, color int) *discordgo.MessageEmbed {

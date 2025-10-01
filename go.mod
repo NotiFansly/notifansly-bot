@@ -1,4 +1,4 @@
-module github.com/fvckgrimm/discord-fansly-notify
+module github.com/NotiFansly/notifansly-bot
 
 go 1.23.0
 

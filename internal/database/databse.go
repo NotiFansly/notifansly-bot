@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fvckgrimm/discord-fansly-notify/internal/models"
+	"github.com/NotiFansly/notifansly-bot/internal/models"
 
 	"gorm.io/driver/postgres"
 	//"gorm.io/driver/sqlite"

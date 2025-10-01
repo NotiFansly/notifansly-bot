@@ -2,7 +2,7 @@
 package health
 
 import (
-	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
+	"github.com/NotiFansly/notifansly-bot/internal/database"
 	"log"
 	"sync/atomic"
 	"time"

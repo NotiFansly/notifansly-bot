@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/fvckgrimm/discord-fansly-notify/api"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/embed"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/models"
+	"github.com/NotiFansly/notifansly-bot/api"
+	"github.com/NotiFansly/notifansly-bot/internal/config"
+	"github.com/NotiFansly/notifansly-bot/internal/database"
+	"github.com/NotiFansly/notifansly-bot/internal/embed"
+	"github.com/NotiFansly/notifansly-bot/internal/health"
+	"github.com/NotiFansly/notifansly-bot/internal/models"
 )
 
 type Bot struct {

@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
-	//"github.com/fvckgrimm/discord-fansly-notify/internal/database"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/health"
+	"github.com/NotiFansly/notifansly-bot/internal/config"
+	//"github.com/NotiFansly/notifansly-bot/internal/database"
+	"github.com/NotiFansly/notifansly-bot/internal/health"
 	"golang.org/x/time/rate"
 )
 

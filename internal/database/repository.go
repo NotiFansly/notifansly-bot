@@ -2,7 +2,7 @@ package database
 
 import (
 	"errors"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/models"
+	"github.com/NotiFansly/notifansly-bot/internal/models"
 	"time"
 
 	"gorm.io/gorm"

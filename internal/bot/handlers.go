@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/config"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/database"
-	"github.com/fvckgrimm/discord-fansly-notify/internal/models"
+	"github.com/NotiFansly/notifansly-bot/internal/config"
+	"github.com/NotiFansly/notifansly-bot/internal/database"
+	"github.com/NotiFansly/notifansly-bot/internal/models"
 )
 
 var (
