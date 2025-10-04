@@ -13,7 +13,7 @@
 
 For complete setup guides and configuration instructions, visit our documentation:
 
-**📖 [Full Documentation](https://creator.notifansly.xyz/docs/self-hosted/creator-bot)**
+**📖 [Full Documentation](https://notifansly.xyz/docs/self-hosted/creator-bot)**
 
 - [Self-Hosted Bot Setup](https://notifansly.xyz/docs/self-hosted) - For basic notification forwarding
 
