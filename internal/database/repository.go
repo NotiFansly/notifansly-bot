@@ -2,9 +2,10 @@ package database
 
 import (
 	"errors"
-	"github.com/NotiFansly/notifansly-bot/internal/models"
+	"strings"
 	"time"
 
+	"github.com/NotiFansly/notifansly-bot/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -204,6 +205,7 @@ func (r *Repository) GetMonitoredUser(guildID, userID string) (*models.Monitored
 }
 
 func (r *Repository) GetMonitoredUserByUsername(guildID, username string) (*models.MonitoredUser, error) {
+	username = strings.ToLower(username)
 	var user models.MonitoredUser
 	err := WithRetry(func() error {
 		result := r.db.Where("guild_id = ? AND LOWER(username) = ?", guildID, username).First(&user)
@@ -256,6 +258,7 @@ func (r *Repository) DeleteMonitoredUser(guildID, userID string) error {
 
 // MODIFIED: DeleteMonitoredUserByUsername to also clean up formats
 func (r *Repository) DeleteMonitoredUserByUsername(guildID, username string) error {
+	username = strings.ToLower(username)
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// First, find the user to get their ID for deleting related data
 		var user models.MonitoredUser
@@ -349,6 +352,7 @@ func (r *Repository) UpdateAvatarInfo(guildID, userID, avatarLocation string) er
 }
 
 func (r *Repository) UpdateLastPostIDByUsername(guildID, username, postID string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -364,6 +368,7 @@ func (r *Repository) UpdateLastPostIDByUsername(guildID, username, postID string
 }
 
 func (r *Repository) UpdateAvatarInfoByUsername(guildID, username, avatarLocation string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -382,6 +387,7 @@ func (r *Repository) UpdateAvatarInfoByUsername(guildID, username, avatarLocatio
 }
 
 func (r *Repository) DisablePostsByUsername(guildID, username string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -397,6 +403,7 @@ func (r *Repository) DisablePostsByUsername(guildID, username string) error {
 }
 
 func (r *Repository) EnablePostsByUsername(guildID, username string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -412,6 +419,7 @@ func (r *Repository) EnablePostsByUsername(guildID, username string) error {
 }
 
 func (r *Repository) DisableLiveByUsername(guildID, username string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -427,6 +435,7 @@ func (r *Repository) DisableLiveByUsername(guildID, username string) error {
 }
 
 func (r *Repository) EnableLiveByUsername(guildID, username string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -464,6 +473,7 @@ func (r *Repository) DeleteAllUsersInGuild(guildID string) error {
 }
 
 func (r *Repository) UpdateLiveImageURL(guildID, username, imageURL string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -479,6 +489,7 @@ func (r *Repository) UpdateLiveImageURL(guildID, username, imageURL string) erro
 }
 
 func (r *Repository) UpdatePostChannel(guildID, username, channelID string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -494,6 +505,7 @@ func (r *Repository) UpdatePostChannel(guildID, username, channelID string) erro
 }
 
 func (r *Repository) UpdateLiveChannel(guildID, username, channelID string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -509,6 +521,7 @@ func (r *Repository) UpdateLiveChannel(guildID, username, channelID string) erro
 }
 
 func (r *Repository) UpdatePostMentionRole(guildID, username, roleID string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
@@ -524,6 +537,7 @@ func (r *Repository) UpdatePostMentionRole(guildID, username, roleID string) err
 }
 
 func (r *Repository) UpdateLiveMentionRole(guildID, username, roleID string) error {
+	username = strings.ToLower(username)
 	return WithRetry(func() error {
 		result := r.db.Model(&models.MonitoredUser{}).
 			Where("guild_id = ? AND LOWER(username) = ?", guildID, username).
