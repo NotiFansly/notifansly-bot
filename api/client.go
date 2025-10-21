@@ -33,9 +33,11 @@ type AccountInfo struct {
 }
 
 type ModelAccountInfo struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Avatar   struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+	About       string `json:"about"`
+	Avatar      struct {
 		Variants []struct {
 			Locations []struct {
 				Location string `json:"location"`
