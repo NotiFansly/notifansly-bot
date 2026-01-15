@@ -13,7 +13,7 @@ import (
 	"github.com/NotiFansly/notifansly-bot/internal/health"
 )
 
-const version = "v0.1.2"
+const version = "v0.1.3"
 
 func main() {
 	config.Load()
