@@ -5,8 +5,8 @@ import (
 	//"log"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/NotiFansly/notifansly-bot/api"
+	"github.com/bwmarrin/discordgo"
 )
 
 func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avatarLocation string, liveImageURL string, color int) *discordgo.MessageEmbed {
@@ -56,7 +56,7 @@ func CreateLiveStreamEmbed(username string, streamInfo *api.StreamResponse, avat
 }
 
 func CreatePostEmbed(username string, post api.Post, avatarLocation string, postMedia []api.AccountMedia, color int) *discordgo.MessageEmbed {
-	postURL := fmt.Sprintf("https://fans.ly/post/%s", post.ID)
+	postURL := fmt.Sprintf("https://fansly.com/post/%s", post.ID)
 	creatorUrl := fmt.Sprintf("https://fansly.com/%s", username)
 	createdTime := time.Unix(post.CreatedAt, 0)
 
